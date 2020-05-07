@@ -26,7 +26,6 @@ void myKeyboard(unsigned char c, int x, int y);
 void myMenuHandler(int value);
 void mySubmenuHandler(int colorIndex);
 void myTimer(int val);
-void* threadFunc(void*);
 //
 //	implemented in main.cpp
 void cleanupAndQuit(void);
@@ -36,7 +35,7 @@ void cleanupAndQuit(void);
 //  Defined in main.c --> don't touch
 //---------------------------------------------------------------------------
 
-extern const int MAX_NUM_THREADS;
+extern const int maxNumThreads;
 extern unsigned int rule;
 extern unsigned int colorMode;
 
@@ -441,10 +440,10 @@ void myTimer(int value)
 	//  possibly I do something to update the state information displayed
     //	in the "state" pane
 	
-	//	This call must **DEFINITELY** go away.  After you have properly multithreaded
-	//	the code, the processing threads will run without having to be called within
-	//	the rendering loop (of the main thread)
-    threadFunc(NULL);
+	////	This call must **DEFINITELY** go away.  After you have properly multithreaded
+	////	the code, the processing threads will run without having to be called within
+	////	the rendering loop (of the main thread)
+ //   threadFunc(NULL);
 	
 	//	And finally I perform the rendering
 	//	This is not the way it should be done, but it seems that Apple is

@@ -2,6 +2,7 @@
 //  main.c
 //  Cellular Automaton
 
+// Help was recieved from Professor Jean-Yves Hervé during office hours.
 
  /*-------------------------------------------------------------------------+
  |	A graphic front end for a grid+state simulation.						|
@@ -34,8 +35,8 @@
  |																			|
  +-------------------------------------------------------------------------*/
 
-#include <cstdio>
 #include <iostream>
+#include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
 #include <time.h>
@@ -48,9 +49,8 @@
 //==================================================================================
 using ThreadInfo = struct {
 	pthread_t id;
-	unsigned int threadIndex;
-	unsigned int startRow;
-	unsigned int endRow;
+	unsigned int index;
+	unsigned int startRow, endRow;
 	pthread_mutex_t lock;
 };
 
@@ -65,7 +65,6 @@ void* threadFunc(void*);
 void swapGrids(void);
 unsigned int cellNewState(unsigned int i, unsigned int j);
 void createThreads(void);
-
 
 //==================================================================================
 //	Precompiler #define to let us specify how things should be handled at the
@@ -98,12 +97,10 @@ unsigned int** nextGrid;
 //	Piece of advice, whenever you do a grid-based (e.g. image processing),
 //	you should always try to run your code with a non-square grid to
 //	spot accidental row-col inversion bugs.
-//const unsigned int numRows = 400, numCols = 420;
-unsigned int numRows, numCols;
+unsigned int numRows = 400, numCols = 420;
 
 //	the number of live threads (that haven't terminated yet)
-//const unsigned int maxNumThreads = 10;
-unsigned int maxNumThreads;
+unsigned int maxNumThreads = 10;
 unsigned int numLiveThreads = 0;
 
 unsigned int rule = GAME_OF_LIFE_RULE;
@@ -115,10 +112,7 @@ ThreadInfo* threadInfo;
 int generation = 0;
 
 unsigned int threadsDoneCount = 0;
-// initialize a mutex object variable to control locking
 pthread_mutex_t threadCountLock;
-
-
 
 //==================================================================================
 //	These are the functions that tie the simulation with the rendering.
@@ -172,14 +166,14 @@ void displayStatePane(void)
 //------------------------------------------------------------------------
 int main(int argc, char** argv) {
 	if (argc != 4) {
-        fprintf(stderr, "cell program launched with incorrect number of arguments.\n"
-                        "Proper usage: ./cell [number of rows] [number of cols] [max number of live threads]\n"
-						"Suggested values: rows: 400, cols: 420, threads: 10");
-        exit(1);
-    }
-	numRows			= (unsigned int)strtoul(argv[1], NULL, 10);
-	numCols 		= (unsigned int)strtoul(argv[2], NULL, 10);
-	maxNumThreads 	= (unsigned int)strtoul(argv[3], NULL, 10);
+		fprintf(stderr, "cell program launched with incorrect number of arguments.\n"
+			"Proper usage: ./cell [number of rows] [number of cols] [max number of live threads]\n"
+			"Suggested values: rows: 400, cols: 420, threads: 10\n");
+		exit(1);
+	}
+	numRows = (unsigned int)strtoul(argv[1], NULL, 10);
+	numCols = (unsigned int)strtoul(argv[2], NULL, 10);
+	maxNumThreads = (unsigned int)strtoul(argv[3], NULL, 10);
 
 	//	This takes care of initializing glut and the GUI.
 	//	You shouldn’t have to touch this
@@ -189,7 +183,7 @@ int main(int argc, char** argv) {
 	initializeApplication();
 
 	//	Now would be the place & time to create mutex locks and threads
-
+	createThreads();
 	//	Now we enter the main loop of the program and to a large extend
 	//	"lose control" over its execution.  The callback functions that 
 	//	we set up earlier will be called when the corresponding event
@@ -258,50 +252,51 @@ void initializeApplication(void)
 
 void* threadFunc(void* arg)
 {
-	std::cout << "Hiiiii" << std::endl;
 	ThreadInfo* info = static_cast<ThreadInfo*>(arg);
+	
 	bool keepGoing = true;
-	std::cout << "Hiiiii" << std::endl;
-	while(keepGoing) {
-		std::cout << "Hiiiiillll" << std::endl;
-		std::cout << "Thread " << info->threadIndex << " at gen " << generation << std::endl << std::flush;
-		for(unsigned int i = info->startRow; i <= info->endRow; i++) {
-			std::cout << "Hiiiiillll" << std::endl;
-			for(unsigned int j = 0; j < numCols; j++) {
+	while (keepGoing) {
+		//std::cout << "startrow: " << info << std::endl;
+		for (unsigned int i = info->startRow; i <= info->endRow; i++)
+		{
+			for (unsigned int j = 0; j < numCols; j++)
+			{
 				unsigned int newState = cellNewState(i, j);
-				// In black and white mode, only dead/alive matters
-				// Dead is dead in any mode
-				if(colorMode == 0 || newState == 0) {
+
+				//	In black and white mode, only alive/dead matters
+				//	Dead is dead in any mode
+				if (colorMode == 0 || newState == 0) {
 					nextGrid[i][j] = newState;
 				}
-				// In color mode, color reflects the "age" of a live cell
+				//	in color mode, color reflext the "age" of a live cell
 				else {
-					// Any cell that has not yet reached the "very old cell"
-					// stage simply got one generation older
-					if(currentGrid[i][j] < NB_COLORS-1)
+					//	Any cell that has not yet reached the "very old cell"
+					//	stage simply got one generation older
+					if (currentGrid[i][j] < NB_COLORS - 1)
 						nextGrid[i][j] = currentGrid[i][j] + 1;
-					// An old cell remains old until it dies
+					//	An old cell remains old until it dies
 					else
 						nextGrid[i][j] = currentGrid[i][j];
 				}
 			}
 		}
-
-		// We are done for this generation
+		// I am done for this generation
 		pthread_mutex_lock(&threadCountLock);
 		threadsDoneCount++;
+
 		// Check if last thread to finish load
-		if(threadsDoneCount == maxNumThreads) {
+		if (threadsDoneCount == maxNumThreads) {
 			pthread_mutex_unlock(&threadCountLock);
 			// Can only be done by the last thread to finish its load
 			swapGrids();
 			usleep(5000);
+			threadsDoneCount = 0;
 			generation++;  //? not T 04:42
-			threadsDoneCount = 0; // reset to 0 ????
+			//threadsDoneCount = 0; // reset to 0 ????
 
 			// wake up the other threads
-			for(unsigned int k = 0; k < maxNumThreads; k++) {
-				if(k != info->threadIndex)
+			for (unsigned int k = 0; k < maxNumThreads; k++) {
+				if (k != info->index)
 					pthread_mutex_unlock(&(threadInfo[k].lock));
 			}
 		}
@@ -311,27 +306,6 @@ void* threadFunc(void* arg)
 			pthread_mutex_lock(&(info->lock));
 		}
 	}
-	
-	//oneGeneration(startRow, endRow);
-
-
-	// // aquire threadCountLock
-	// threadsDoneCount++;
-	// if(threadsDoneCount == maxNumThreads) {
-	// 	generation++;
-	// 	// aquire gridLock
-	// 	swapGrids();
-	// 	// release gridLock
-
-	// 	// wake up everybody else
-	// 	for(int i = 0; i < numThreads) {
-	// 		if(i != my index) {
-	// 			// wakeup thread i.  Do a mutex unlock of threadInfo[i].lock
-	// 			pthread_mutex_unlock(&(threadInfo[i].lock));
-	// 		}
-	// 	}
-	// }
-
 	return nullptr;
 }
 
@@ -358,48 +332,6 @@ void swapGrids(void)
 	nextGrid = tempGrid;
 }
 
-//	I have decided to go for maximum modularity and readability, at the
-//	cost of some performance.  This may seem contradictory with the
-//	very purpose of multi-threading our application.  I won't deny it.
-//	My justification here is that this is very much an educational exercise,
-//	my objective being for you to understand and master the mechanisms of
-//	multithreading and synchronization with mutex.  After you get there,
-//	you can micro-optimi1ze your synchronized multithreaded apps to your
-//	heart's content.
-void oneGeneration(void)
-{
-	static int generation = 0;
-	
-	for (unsigned int i=0; i<numRows; i++)
-	{
-		for (unsigned int j=0; j<numCols; j++)
-		{
-			unsigned int newState = cellNewState(i, j);
-
-			//	In black and white mode, only alive/dead matters
-			//	Dead is dead in any mode
-			if (colorMode == 0 || newState == 0)
-			{
-				nextGrid[i][j] = newState;
-			}
-			//	in color mode, color reflext the "age" of a live cell
-			else
-			{
-				//	Any cell that has not yet reached the "very old cell"
-				//	stage simply got one generation older
-				if (currentGrid[i][j] < NB_COLORS-1)
-					nextGrid[i][j] = currentGrid[i][j] + 1;
-				//	An old cell remains old until it dies
-				else
-					nextGrid[i][j] = currentGrid[i][j];
-
-			}
-		}
-	}
-	generation++;
-	
-	swapGrids();
-}
 
 //	Here I give three different implementations
 //	of a slightly different algorithm, allowing for changes at the border
@@ -447,32 +379,32 @@ unsigned int cellNewState(unsigned int i, unsigned int j)
 					count++;
 				if (currentGrid[i-1][j] != 0)
 					count++;
-				if (j<numCols-1 && currentGrid[i-1][j+1] != 0)
+				if (j<NUM_COLS-1 && currentGrid[i-1][j+1] != 0)
 					count++;
 			}
 
 			if (j>0 && currentGrid[i][j-1] != 0)
 				count++;
-			if (j<numCols-1 && currentGrid[i][j+1] != 0)
+			if (j<NUM_COLS-1 && currentGrid[i][j+1] != 0)
 				count++;
 
-			if (i<numRows-1)
+			if (i<NUM_ROWS-1)
 			{
 				if (j>0 && currentGrid[i+1][j-1] != 0)
 					count++;
 				if (currentGrid[i+1][j] != 0)
 					count++;
-				if (j<numCols-1 && currentGrid[i+1][j+1] != 0)
+				if (j<NUM_COLS-1 && currentGrid[i+1][j+1] != 0)
 					count++;
 			}
 			
 	
 		#elif FRAME_BEHAVIOR == FRAME_WRAPPED
 	
-			unsigned int 	iM1 = (i+numRows-1)%numRows,
-							iP1 = (i+1)%numRows,
-							jM1 = (j+numCols-1)%numCols,
-							jP1 = (j+1)%numCols;
+			unsigned int 	iM1 = (i+NUM_ROWS-1)%NUM_ROWS,
+							iP1 = (i+1)%NUM_ROWS,
+							jM1 = (j+NUM_COLS-1)%NUM_COLS,
+							jP1 = (j+1)%NUM_COLS;
 			count = currentGrid[iM1][jM1] != 0 +
 					currentGrid[iM1][j] != 0 +
 					currentGrid[iM1][jP1] != 0  +
@@ -576,31 +508,36 @@ unsigned int cellNewState(unsigned int i, unsigned int j)
 }
 
 void createThreads(void) {
-
 	pthread_mutex_init(&threadCountLock, nullptr);
-
-	// initialize ThreadInfo structs
+	// initialize array of ThreadInfo structs
 	threadInfo = new ThreadInfo[maxNumThreads];
 	
-	threadInfo[0].threadIndex = 0;
-	threadInfo[0].startRow = 0;
-	threadInfo[0].endRow = numRows/2;
-	// Create the lock pre-locked. Don't think there's another way to do this.
-	pthread_mutex_init(&(threadInfo[0].lock), nullptr);
-	pthread_mutex_lock(&(threadInfo[0].lock));
+	unsigned int p = numRows / maxNumThreads;
+	unsigned int m = numRows % maxNumThreads; // threads with +1 load
+	unsigned int startRow = 0;
+	for (unsigned int k = 0; k < maxNumThreads; k++) {
+		threadInfo[k].index = k;
+		
+		unsigned int endRow = k < m ? startRow + p : startRow + p - 1;
 
-	threadInfo[1].threadIndex = 1;
-	threadInfo[1].startRow = numRows/2 + 1;
-	threadInfo[1].endRow = numRows-1;
-	// Create the lock pre-locked
-	pthread_mutex_init(&(threadInfo[1].lock), nullptr);
-	pthread_mutex_lock(&(threadInfo[1].lock));
+		// Compute startRow, endRow
+		threadInfo[k].startRow = startRow;
+		threadInfo[k].endRow = endRow;
+		startRow = endRow + 1;
 
-	for(unsigned int k = 0; k < maxNumThreads; k++) {
-		// Create thread k
-		pthread_create( &(threadInfo[k].id),	// ptr to pthread_t
-						nullptr, 				//thread attributes
-						threadFunc,				// thread function
-						threadInfo+k);			// pointer to the data
+		// Create the lock pre-locked. Don't think there's another way to do this.
+		pthread_mutex_init(&(threadInfo[k].lock), nullptr);
+		pthread_mutex_lock(&(threadInfo[k].lock));
+	}
+
+	for (unsigned int k = 0; k < maxNumThreads; k++) {
+		// create thread k
+		int error_code = pthread_create(&(threadInfo[k].id),	// ptr to pthread_t
+										nullptr, 				// thread attributes
+										threadFunc,				// thread function
+										&(threadInfo[k]));		// pointer to the data
+		if (error_code < 0)
+			std::cerr << "ERROR: Failed to create ghost thread with error code " << error_code << std::endl;
+		else numLiveThreads++;  // increment counter to display on GUI
 	}
 }
