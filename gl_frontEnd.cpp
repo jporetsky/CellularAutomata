@@ -351,13 +351,13 @@ void myKeyboard(unsigned char c, int x, int y)
 
 		//	'+' --> increase simulation speed
 		case '+':
-			speed *= 11;
+			speed *= 9;
 			speed /= 10;
 			break;
 
 		//	'-' --> reduce simulation speed
 		case '-':
-			speed *= 9;
+			speed *= 11;
 			speed /= 10;
 			break;
 
