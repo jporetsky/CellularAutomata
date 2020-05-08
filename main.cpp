@@ -104,6 +104,7 @@ unsigned int maxNumThreads = 10;
 unsigned int numLiveThreads = 0;
 
 unsigned int rule = GAME_OF_LIFE_RULE;
+unsigned int speed = 5000;
 
 unsigned int colorMode = 0;
 
@@ -289,7 +290,7 @@ void* threadFunc(void* arg)
 			pthread_mutex_unlock(&threadCountLock);
 			// Can only be done by the last thread to finish its load
 			swapGrids();
-			usleep(5000);
+			usleep(speed);
 			threadsDoneCount = 0;
 			generation++;  //? not T 04:42
 			//threadsDoneCount = 0; // reset to 0 ????
@@ -498,7 +499,7 @@ unsigned int cellNewState(unsigned int i, unsigned int j)
 			break;
 
 			break;
-		
+
 		default:
 			printf("Invalid rule number\n");
 			exit(5);

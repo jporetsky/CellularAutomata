@@ -39,6 +39,8 @@ extern const int maxNumThreads;
 extern unsigned int rule;
 extern unsigned int colorMode;
 
+extern unsigned int speed;
+
 
 //---------------------------------------------------------------------------
 //  Interface constants
@@ -349,10 +351,14 @@ void myKeyboard(unsigned char c, int x, int y)
 
 		//	'+' --> increase simulation speed
 		case '+':
+			speed *= 11;
+			speed /= 10;
 			break;
 
 		//	'-' --> reduce simulation speed
 		case '-':
+			speed *= 9;
+			speed /= 10;
 			break;
 
 		//	'1' --> apply Rule 1 (Game of Life: B23/S3)
