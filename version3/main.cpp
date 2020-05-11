@@ -65,7 +65,7 @@ void* threadFunc(void*);
 void swapGrids(void);
 unsigned int cellNewState(unsigned int i, unsigned int j);
 void createThreads(void);
-
+void readPipe(void);
 //==================================================================================
 //	Precompiler #define to let us specify how things should be handled at the
 //	border of the frame
@@ -202,6 +202,44 @@ int main(int argc, char** argv) {
 //	This is a part that you may have to edit and add to.
 //
 //==================================================================================
+
+void readPipe(void){
+
+	char *pipe = "pipe";
+	int fd1;
+	int max_buf = 1000; 
+	char buf[max_buf];
+
+	int line_count=0;
+	int curr_size=0;
+	while(1){
+		fd= open(pipe, O_RDONLY);
+		if (fd<0){
+			printf("PIPE DOES NOT EXIST!!!");
+		}
+
+		read(fd, buf, max_buf);
+
+        // First open in read only and read 
+        fd1 = open(myfifo,O_RDONLY); 
+        read(fd1, str1, 80); 
+  
+        // Print the read string and close 
+        printf("User1: %s\n", str1); 
+        close(fd1); 
+  
+        // Now open in write mode and write 
+        // string taken from user. 
+        fd1 = open(myfifo,O_WRONLY); 
+        fgets(str2, 80, stdin); 
+        write(fd1, str2, strlen(str2)+1); 
+        close(fd1);
+	}
+
+}
+
+
+
 
 void cleanupAndQuit(void)
 {
