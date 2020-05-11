@@ -2,7 +2,15 @@
 //  main.c
 //  Cellular Automaton
 
-// Help was recieved from Professor Jean-Yves Hervé during office hours.
+/****************************************************************************
+ * Group members:															*
+ *		Shane Wallerick														*
+ *		Brendan Tierney														*
+ *		Jake Poretsky														*
+ *																			*
+ * Help was recieved from Professor Jean-Yves Hervé during office hours.	*
+ *																			*
+ ***************************************************************************/
 
  /*-------------------------------------------------------------------------+
  |	A graphic front end for a grid+state simulation.						|
