@@ -8,6 +8,7 @@
 #include <fcntl.h> 
 #include <sys/stat.h> 
 #include <sys/types.h> 
+#include <cstring>
 
 #define PIPE "/tmp/pipe"
 
@@ -26,8 +27,8 @@ void readPipe(void){
 		}
 
 		ssize_t size = read(fd, buf, max_buf);
-		buf[size] = '\0'; 
-      if(buf == "27"){
+		buf[size] = '\0';
+      if(strcmp(buf, "27\0") == 0){
             printf("breaking");
             break;
       }
