@@ -9,27 +9,31 @@
 #include <sys/stat.h> 
 #include <sys/types.h> 
 
+#define PIPE "/tmp/pipe"
+
 void readPipe(void){
 
-	char *pipe = "pipe";
-	int fd;
+	FILE *fp;
+
 	int max_buf = 1000; 
 	char buf[1000];
 
 	while(1){
-		fd = open(pipe, O_RDONLY);
+		int fd = open(PIPE, O_RDONLY);
 		if (fd<0){
 			printf("PIPE DOES NOT EXIST!!!");
+			break;
 		}
 
-		read(fd, buf, max_buf);
-        if(buf = '27'){
+		ssize_t size = read(fd, buf, max_buf);
+		buf[size] = '\0'; 
+      if(buf == "27"){
             printf("breaking");
             break;
-        }
-        // Print the read string and close 
-        printf(buf); 
-        close(fd); 
+      }
+      //print read string and close
+      printf("PIPE STUFF:   %s", buf); 
+      close(fd); 
   
 	}
 
