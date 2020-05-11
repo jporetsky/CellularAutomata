@@ -2,6 +2,7 @@
 //  main.c
 //  Cellular Automaton
 
+// Help was recieved from Professor Jean-Yves Hervé during office hours.
 
  /*-------------------------------------------------------------------------+
  |	A graphic front end for a grid+state simulation.						|
@@ -34,6 +35,7 @@
  |																			|
  +-------------------------------------------------------------------------*/
 
+#include <iostream>
 #include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
@@ -48,6 +50,8 @@
 using ThreadInfo = struct {
 	pthread_t id;
 	unsigned int index;
+	unsigned int startRow, endRow;
+	pthread_mutex_t lock;
 };
 
 
@@ -58,10 +62,9 @@ void displayGridPane(void);
 void displayStatePane(void);
 void initializeApplication(void);
 void* threadFunc(void*);
+void swapGrids(void);
 unsigned int cellNewState(unsigned int i, unsigned int j);
-void aquireLocksAbout(unsigned int row, unsigned int col);
-void releaseLocksAbout(unsigned int row, unsigned int col);
-
+void createThreads(void);
 
 //==================================================================================
 //	Precompiler #define to let us specify how things should be handled at the
@@ -85,39 +88,32 @@ extern int GRID_PANE, STATE_PANE;
 extern int gMainWindow, gSubwindow[2];
 
 //	The state grid and its dimensions.  We now have two copies of the grid:
-//		- grid is the one displayed in the graphic front end
-//		- grid is the grid that stores the next generation of cell
+//		- currentGrid is the one displayed in the graphic front end
+//		- nextGrid is the grid that stores the next generation of cell
 //			states, as computed by our threads.
-
-// option 1: seperate arrays of cells and arrays
-//unsigned int** grid;
-//pthread_mutex_t** cellLock;
-
-// Option 2: group the cell state + lock in a struct
-using Cell = struct {
-	unsigned int state;
-	pthread_mutex_t lock;
-};
-Cell** cGrid;
+unsigned int** currentGrid;
+unsigned int** nextGrid;
 
 //	Piece of advice, whenever you do a grid-based (e.g. image processing),
 //	you should always try to run your code with a non-square grid to
 //	spot accidental row-col inversion bugs.
-const unsigned int NUM_ROWS = 400, NUM_COLS = 420;
+unsigned int numRows = 400, numCols = 420;
 
 //	the number of live threads (that haven't terminated yet)
-const unsigned int MAX_NUM_THREADS = 10;
+unsigned int maxNumThreads = 10;
 unsigned int numLiveThreads = 0;
 
 unsigned int rule = GAME_OF_LIFE_RULE;
-unsigned int speed = 250;
+unsigned int speed = 5000;
 
 unsigned int colorMode = 0;
-//// ds
-///dsfhd
-/  sgd
-///hsdh
 
+ThreadInfo* threadInfo;
+
+int generation = 0;
+
+unsigned int threadsDoneCount = 0;
+pthread_mutex_t threadCountLock;
 
 //==================================================================================
 //	These are the functions that tie the simulation with the rendering.
@@ -138,7 +134,7 @@ void displayGridPane(void)
 	//	This is the call that makes OpenGL render the grid.
 	//
 	//---------------------------------------------------------
-	drawGrid(grid, NUM_ROWS, NUM_COLS);
+	drawGrid(currentGrid, numRows, numCols);
 	
 	//	This is OpenGL/glut magic.  Don't touch
 	glutSwapBuffers();
@@ -169,8 +165,17 @@ void displayStatePane(void)
 //------------------------------------------------------------------------
 //	You shouldn't have to change anything in the main function
 //------------------------------------------------------------------------
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
+	if (argc != 4) {
+		fprintf(stderr, "cell program launched with incorrect number of arguments.\n"
+			"Proper usage: ./cell [number of rows] [number of cols] [max number of live threads]\n"
+			"Suggested values: rows: 400, cols: 420, threads: 10\n");
+		exit(1);
+	}
+	numRows = (unsigned int)strtoul(argv[1], NULL, 10);
+	numCols = (unsigned int)strtoul(argv[2], NULL, 10);
+	maxNumThreads = (unsigned int)strtoul(argv[3], NULL, 10);
+
 	//	This takes care of initializing glut and the GUI.
 	//	You shouldn’t have to touch this
 	initializeFrontEnd(argc, argv, displayGridPane, displayStatePane);
@@ -179,17 +184,7 @@ int main(int argc, char** argv)
 	initializeApplication();
 
 	//	Now would be the place & time to create mutex locks and threads
-	threadInfo = new ThreadInfo[MAX_NUM_THREADS];
-	for (unsigned int k = 0; k < MAX_NUM_THREADS; k++) {
-		threadInfo[k].index = k; 
-	}
-	for (unsigned int k = 0; k < MAX_NUM_THREADS; k++) {
-		pthread_create(&(threadInfo[k].id),
-			nullptr,
-			threadFunc,
-			threadInfo + k);
-	}
-
+	createThreads();
 	//	Now we enter the main loop of the program and to a large extend
 	//	"lose control" over its execution.  The callback functions that 
 	//	we set up earlier will be called when the corresponding event
@@ -213,41 +208,30 @@ void cleanupAndQuit(void)
 	//	Free allocated resource before leaving (not absolutely needed, but
 	//	just nicer.  Also, if you crash there, you know something is wrong
 	//	in your code.
-	for (unsigned int i=1; i<NUM_ROWS; i++)
-	{
-		delete []grid[i];
-	}
-	delete []grid;
+    for (unsigned int i=1; i<numRows; i++)
+    {
+        delete []currentGrid[i];
+        delete []nextGrid[i];
+    }
+	delete []currentGrid;
+	delete []nextGrid;
 
 	exit(0);
 }
 
-///////////////////// CHECK THE CODE BELOW....UNSURE OF SYNTAX
-//*******************************************
+
 
 void initializeApplication(void)
 {
-	//  Allocate 2D grids
-	//--------------------
-
-	//// Option 1
- //   grid = new unsigned int*[NUM_ROWS];
- //   cellLock = new pthread_mutex_t*[NUM_ROWS];
- //   for (unsigned int i=0; i<NUM_ROWS; i++)
- //   {
- //       grid[i] = new unsigned int[NUM_COLS];
-	//	cellLock[i] = new pthread_mutex_t[NUM_COLS];
-	//	for(unsigned int j = 0; j < NUM_COLS; j++)
-	//		pthread_mutex_init(cellLock[i]+j, nullptr)
- //   }
-
-	// Option 2:
-	cGrid = new Cell*[NUM_ROWS];
-	for (unsigned int i = 0; i < NUM_ROWS; i++) {
-		cGrid[i] = new Cell[NUM_COLS];
-		for (unsigned int j = 0; j < NUM_COLS; j++)
-			pthread_mutex_init(&(cGrid[i][j].lock), nullptr);
-	}
+    //  Allocate 2D grids
+    //--------------------
+    currentGrid = new unsigned int*[numRows];
+    nextGrid = new unsigned int*[numRows];
+    for (unsigned int i=0; i<numRows; i++)
+    {
+        currentGrid[i] = new unsigned int[numCols];
+        nextGrid[i] = new unsigned int[numCols];
+    }
 	
 	//---------------------------------------------------------------
 	//	All the code below to be replaced/removed
@@ -269,67 +253,84 @@ void initializeApplication(void)
 
 void* threadFunc(void* arg)
 {
-	(void) arg;
+	ThreadInfo* info = static_cast<ThreadInfo*>(arg);
 	
 	bool keepGoing = true;
 	while (keepGoing) {
-		// pick a random grid cell
-		unsigned int row, col;
-		#if FRAME_BEHAVIOR == FRAME_DEAD
-
-
-		#elif FRAME_BEHAVIOR == FRAME_RANDOM
-
-
-		#elif FRAME_BEHAVIOR == FRAME_CLIPPED
-
-
-		#elif FRAME_BEHAVIOR == FRAME_WRAPPED
-
-		#endif
-
-		//aquire lock(s) about (row, col) cell
-		//***************************************
-		aquireLocksAbout(row, col); //////////////////////////vid2-5/9: 8:00
-		unsigned int newState = cellNewState(i, j);
-
-		//	In black and white mode, only alive/dead matters
-		//	Dead is dead in any mode
-		if (colorMode == 0 || newState == 0)
+		//std::cout << "startrow: " << info << std::endl;
+		for (unsigned int i = info->startRow; i <= info->endRow; i++)
 		{
-			// option 1
-			// grid[row][col] = newState;
-			// Option 2
-			cGrid[row][col].state = newState
+			for (unsigned int j = 0; j < numCols; j++)
+			{
+				unsigned int newState = cellNewState(i, j);
+
+				//	In black and white mode, only alive/dead matters
+				//	Dead is dead in any mode
+				if (colorMode == 0 || newState == 0) {
+					nextGrid[i][j] = newState;
+				}
+				//	in color mode, color reflext the "age" of a live cell
+				else {
+					//	Any cell that has not yet reached the "very old cell"
+					//	stage simply got one generation older
+					if (currentGrid[i][j] < NB_COLORS - 1)
+						nextGrid[i][j] = currentGrid[i][j] + 1;
+					//	An old cell remains old until it dies
+					else
+						nextGrid[i][j] = currentGrid[i][j];
+				}
+			}
 		}
-		//	in color mode, color reflext the "age" of a live cell
-		else
-		{
-			//	Any cell that has not yet reached the "very old cell"
-			//	stage simply got one generation older
-			if (grid[row][col] < NB_COLORS - 1)
-				grid[row][col]++;
+		// I am done for this generation
+		pthread_mutex_lock(&threadCountLock);
+		threadsDoneCount++;
 
+		// Check if last thread to finish load
+		if (threadsDoneCount == maxNumThreads) {
+			pthread_mutex_unlock(&threadCountLock);
+			// Can only be done by the last thread to finish its load
+			swapGrids();
+			usleep(speed);
+			threadsDoneCount = 0;
+			generation++;  //? not T 04:42
+			//threadsDoneCount = 0; // reset to 0 ????
+
+			// wake up the other threads
+			for (unsigned int k = 0; k < maxNumThreads; k++) {
+				if (k != info->index)
+					pthread_mutex_unlock(&(threadInfo[k].lock));
+			}
 		}
-
-		// Release lock(s) about (row, col) cell
-		releaseLocksAbout(row, col); //////////////////////////vid2-5/9: 8:00
-		usleep(speed); // don't need to sleep as long
-
+		else {
+			pthread_mutex_unlock(&threadCountLock);
+			// and wait for the rest of the threads to finish
+			pthread_mutex_lock(&(info->lock));
+		}
 	}
-	return NULL;
+	return nullptr;
 }
 
 
 void resetGrid(void)
 {
-	for (unsigned int i=0; i<NUM_ROWS; i++)
+	for (unsigned int i=0; i<numRows; i++)
 	{
-		for (unsigned int j=0; j<NUM_COLS; j++)
+		for (unsigned int j=0; j<numCols; j++)
 		{
-			grid[i][j] = rand() % 2;
+			nextGrid[i][j] = rand() % 2;
 		}
 	}
+	swapGrids();
+}
+
+//	This function swaps the current and next grids, as well as their
+//	companion 2D grid.  Note that we only swap the "top" layer of
+//	the 2D grids.
+void swapGrids(void)
+{
+	unsigned int** tempGrid = currentGrid;
+	currentGrid = nextGrid;
+	nextGrid = tempGrid;
 }
 
 
@@ -347,17 +348,17 @@ unsigned int cellNewState(unsigned int i, unsigned int j)
 
 	//	Away from the border, we simply count how many among the cell's
 	//	eight neighbors are alive (cell state > 0)
-	if (i>0 && i<NUM_ROWS-1 && j>0 && j<NUM_COLS-1)
+	if (i>0 && i<numRows-1 && j>0 && j<numCols-1)
 	{
 		//	remember that in C, (x == val) is either 1 or 0
-		count = (grid[i-1][j-1] != 0) +
-				(grid[i-1][j] != 0) +
-				(grid[i-1][j+1] != 0)  +
-				(grid[i][j-1] != 0)  +
-				(grid[i][j+1] != 0)  +
-				(grid[i+1][j-1] != 0)  +
-				(grid[i+1][j] != 0)  +
-				(grid[i+1][j+1] != 0);
+		count = (currentGrid[i-1][j-1] != 0) +
+				(currentGrid[i-1][j] != 0) +
+				(currentGrid[i-1][j+1] != 0)  +
+				(currentGrid[i][j-1] != 0)  +
+				(currentGrid[i][j+1] != 0)  +
+				(currentGrid[i+1][j-1] != 0)  +
+				(currentGrid[i+1][j] != 0)  +
+				(currentGrid[i+1][j+1] != 0);
 	}
 	//	on the border of the frame...
 	else
@@ -375,26 +376,26 @@ unsigned int cellNewState(unsigned int i, unsigned int j)
 	
 			if (i>0)
 			{
-				if (j>0 && grid[i-1][j-1] != 0)
+				if (j>0 && currentGrid[i-1][j-1] != 0)
 					count++;
-				if (grid[i-1][j] != 0)
+				if (currentGrid[i-1][j] != 0)
 					count++;
-				if (j<NUM_COLS-1 && grid[i-1][j+1] != 0)
+				if (j<NUM_COLS-1 && currentGrid[i-1][j+1] != 0)
 					count++;
 			}
 
-			if (j>0 && grid[i][j-1] != 0)
+			if (j>0 && currentGrid[i][j-1] != 0)
 				count++;
-			if (j<NUM_COLS-1 && grid[i][j+1] != 0)
+			if (j<NUM_COLS-1 && currentGrid[i][j+1] != 0)
 				count++;
 
 			if (i<NUM_ROWS-1)
 			{
-				if (j>0 && grid[i+1][j-1] != 0)
+				if (j>0 && currentGrid[i+1][j-1] != 0)
 					count++;
-				if (grid[i+1][j] != 0)
+				if (currentGrid[i+1][j] != 0)
 					count++;
-				if (j<NUM_COLS-1 && grid[i+1][j+1] != 0)
+				if (j<NUM_COLS-1 && currentGrid[i+1][j+1] != 0)
 					count++;
 			}
 			
@@ -405,14 +406,14 @@ unsigned int cellNewState(unsigned int i, unsigned int j)
 							iP1 = (i+1)%NUM_ROWS,
 							jM1 = (j+NUM_COLS-1)%NUM_COLS,
 							jP1 = (j+1)%NUM_COLS;
-			count = grid[iM1][jM1] != 0 +
-					grid[iM1][j] != 0 +
-					grid[iM1][jP1] != 0  +
-					grid[i][jM1] != 0  +
-					grid[i][jP1] != 0  +
-					grid[iP1][jM1] != 0  +
-					grid[iP1][j] != 0  +
-					grid[iP1][jP1] != 0 ;
+			count = currentGrid[iM1][jM1] != 0 +
+					currentGrid[iM1][j] != 0 +
+					currentGrid[iM1][jP1] != 0  +
+					currentGrid[i][jM1] != 0  +
+					currentGrid[i][jP1] != 0  +
+					currentGrid[iP1][jM1] != 0  +
+					currentGrid[iP1][j] != 0  +
+					currentGrid[iP1][jP1] != 0 ;
 
 		#else
 			#error undefined frame behavior
@@ -433,7 +434,7 @@ unsigned int cellNewState(unsigned int i, unsigned int j)
 		case GAME_OF_LIFE_RULE:
 
 			//	if the cell is currently occupied by a live cell, look at "Stay alive rule"
-			if (grid[i][j] != 0)
+			if (currentGrid[i][j] != 0)
 			{
 				if (count == 3 || count == 2)
 					newState = 1;
@@ -450,7 +451,7 @@ unsigned int cellNewState(unsigned int i, unsigned int j)
 		case CORAL_GROWTH_RULE:
 
 			//	if the cell is currently occupied by a live cell, look at "Stay alive rule"
-			if (grid[i][j] != 0)
+			if (currentGrid[i][j] != 0)
 			{
 				if (count > 3)
 					newState = 1;
@@ -467,7 +468,7 @@ unsigned int cellNewState(unsigned int i, unsigned int j)
 		case AMOEBA_RULE:
 
 			//	if the cell is currently occupied by a live cell, look at "Stay alive rule"
-			if (grid[i][j] != 0)
+			if (currentGrid[i][j] != 0)
 			{
 				if (count == 1 || count == 3 || count == 5 || count == 8)
 					newState = 1;
@@ -484,7 +485,7 @@ unsigned int cellNewState(unsigned int i, unsigned int j)
 		case MAZE_RULE:
 
 			//	if the cell is currently occupied by a live cell, look at "Stay alive rule"
-			if (grid[i][j] != 0)
+			if (currentGrid[i][j] != 0)
 			{
 				if (count >= 1 && count <= 5)
 					newState = 1;
@@ -498,7 +499,7 @@ unsigned int cellNewState(unsigned int i, unsigned int j)
 			break;
 
 			break;
-		
+
 		default:
 			printf("Invalid rule number\n");
 			exit(5);
@@ -507,36 +508,37 @@ unsigned int cellNewState(unsigned int i, unsigned int j)
 	return newState;
 }
 
-void aquireLocksAbout(unsigned int row, unsigned int col) {
-	#if FRAME_BEHAVIOR == FRAME_DEAD
-		for (int i = -1; i < 1; i++)
-			for (int j = -1; j < 1; j++)
-				pthread_mutex_lock(&(cellLock[row+i][col+j]));
+void createThreads(void) {
+	pthread_mutex_init(&threadCountLock, nullptr);
+	// initialize array of ThreadInfo structs
+	threadInfo = new ThreadInfo[maxNumThreads];
+	
+	unsigned int p = numRows / maxNumThreads;
+	unsigned int m = numRows % maxNumThreads; // threads with +1 load
+	unsigned int startRow = 0;
+	for (unsigned int k = 0; k < maxNumThreads; k++) {
+		threadInfo[k].index = k;
+		
+		unsigned int endRow = k < m ? startRow + p : startRow + p - 1;
 
-	#elif FRAME_BEHAVIOR == FRAME_RANDOM
-	pthread_mutex_lock(cellLock[row] + col);
+		// Compute startRow, endRow
+		threadInfo[k].startRow = startRow;
+		threadInfo[k].endRow = endRow;
+		startRow = endRow + 1;
 
-	#elif FRAME_BEHAVIOR == FRAME_CLIPPED
+		// Create the lock pre-locked. Don't think there's another way to do this.
+		pthread_mutex_init(&(threadInfo[k].lock), nullptr);
+		pthread_mutex_lock(&(threadInfo[k].lock));
+	}
 
-
-	#elif FRAME_BEHAVIOR == FRAME_WRAPPED
-		for (int i = -1; i < 1; i++)
-			for (int j = -1; j < 1; j++)
-				pthread_mutex_lock(&(cellLock[(row + NUM_ROWS + i) % NUM_ROWS][(col + NUM_COLS + j) % NUM_COLS]));
-
-	#endif
-}
-void releaseLocksAbout(unsigned int row, unsigned int col) {
-	#if FRAME_BEHAVIOR == FRAME_DEAD
-
-
-	#elif FRAME_BEHAVIOR == FRAME_RANDOM
-
-
-	#elif FRAME_BEHAVIOR == FRAME_CLIPPED
-
-
-	#elif FRAME_BEHAVIOR == FRAME_WRAPPED
-
-	#endif
+	for (unsigned int k = 0; k < maxNumThreads; k++) {
+		// create thread k
+		int error_code = pthread_create(&(threadInfo[k].id),	// ptr to pthread_t
+										nullptr, 				// thread attributes
+										threadFunc,				// thread function
+										&(threadInfo[k]));		// pointer to the data
+		if (error_code < 0)
+			std::cerr << "ERROR: Failed to create ghost thread with error code " << error_code << std::endl;
+		else numLiveThreads++;  // increment counter to display on GUI
+	}
 }
