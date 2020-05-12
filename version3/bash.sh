@@ -1,9 +1,9 @@
 #!/bin/bash
 
 
-################## steps ###########################################
-# - bash make the main pipe									
-# - launch process with new pipe attached
+################## manual ###########################################
+# - launch script: "bash bash.sh height width threadNum"								
+# -
 # - thread dedicated to listening on pipe
 # - pipe thread init between gui init and thread init in init app
 #
@@ -25,16 +25,16 @@ g++ main.cpp gl_frontEnd.cpp -lm -lGL -lglut -lpthread -o cell
 if [ -f cell ]
 then	
 	echo "built cell"
-	./cell $1 $2 $3
+	#./cell $1 $2 $3
 fi
 
 ## for testing
-# g++ read_test.cpp -o pipeTest
-# if [ -f pipeTest ]
-# then	
-# 	echo "built pipeTest"
-# 	./pipeTest
-# fi
+#g++ read_test.cpp -o pipeTest
+#if [ -f pipeTest ]
+#then	
+#	echo "built pipeTest"
+ 	#./pipeTest
+#fi
 
 
 while true
