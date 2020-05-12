@@ -34,13 +34,18 @@
  |		- '4' --> apply Rule 4 (Maze: B3/S12345)							|
  |																			|
  +-------------------------------------------------------------------------*/
-
 #include <iostream>
 #include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
 #include <time.h>
 #include <pthread.h>
+#include <string.h> 
+#include <fcntl.h> 
+#include <sys/stat.h> 
+#include <sys/types.h> 
+#include <cstring>
+#include <string>
 //
 #include "gl_frontEnd.h"
 
@@ -180,9 +185,14 @@ int main(int argc, char** argv) {
 	//	You shouldn’t have to touch this
 	initializeFrontEnd(argc, argv, displayGridPane, displayStatePane);
 	
+
 	//	Now we can do application-level initialization
 	initializeApplication();
 
+	// call the communication to pipe
+	pthread_t ReaderID;
+	pthread_create(&ReaderID, NULL, &readPipe, NULL);
+	
 	//	Now would be the place & time to create mutex locks and threads
 	createThreads();
 	//	Now we enter the main loop of the program and to a large extend
@@ -204,38 +214,46 @@ int main(int argc, char** argv) {
 //==================================================================================
 
 void readPipe(void){
-
-	char *pipe = "pipe";
-	int fd1;
+	// array stores pipe values
 	int max_buf = 1000; 
-	char buf[max_buf];
-
-	int line_count=0;
-	int curr_size=0;
-	while(1){
-		fd= open(pipe, O_RDONLY);
+	char buf[1000];
+    // listener loops until user enters "end"
+	bool temp == true;
+	while(temp == true){
+		int fd = open(PIPE, O_RDONLY);
 		if (fd<0){
 			printf("PIPE DOES NOT EXIST!!!");
+			break;
 		}
 
-		read(fd, buf, max_buf);
+		// take input from pipe as string
+		ssize_t size = read(fd, buf, max_buf);
+		buf[size] = '\0';
 
-        // First open in read only and read 
-        fd1 = open(myfifo,O_RDONLY); 
-        read(fd1, str1, 80); 
-  
-        // Print the read string and close 
-        printf("User1: %s\n", str1); 
-        close(fd1); 
-  
-        // Now open in write mode and write 
-        // string taken from user. 
-        fd1 = open(myfifo,O_WRONLY); 
-        fgets(str2, 80, stdin); 
-        write(fd1, str2, strlen(str2)+1); 
-        close(fd1);
+		std::string str(buf);
+
+        //printf("PIPE STUFF:   %s", buf); 
+        close(fd);   
+
+		if( str.compare("end") == 1){}
+			temp == false;
+			break;
+		}
+		if( str.compare("faster") == 1){
+			speed *= 9;
+			speed /= 10;
+		}
+		if( str.compare("slower")== 1){
+			speed *= 11;
+			speed /= 10;
+		}
+		if( str.compare("rule 1") == 1) rule = GAME_OF_LIFE_RULE;
+		if( str.compare("rule 2") == 1) rule = CORAL_GROWTH_RULE;
+		if( str.compare("rule 3") == 1) rule = AMOEBA_RULE;
+		if( str.compare("rule 4") == 1) rule = MAZE_RULE;
+		if( str.compare("color on") == 1 || str.compare("color off") == 1) colorMode = !colorMode;
+		if( str.compare("line") == 1) drawGridLines = !drawGridLines;
 	}
-
 }
 
 
@@ -553,7 +571,7 @@ void createThreads(void) {
 	
 	unsigned int p = numRows / maxNumThreads;
 	unsigned int m = numRows % maxNumThreads; // threads with +1 load
-	unsigned int startRow = 0;
+	unsigned int startRow = 0;s
 	for (unsigned int k = 0; k < maxNumThreads; k++) {
 		threadInfo[k].index = k;
 		

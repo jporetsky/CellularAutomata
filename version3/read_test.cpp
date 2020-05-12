@@ -9,6 +9,7 @@
 #include <sys/stat.h> 
 #include <sys/types.h> 
 #include <cstring>
+#include <string>
 
 #define PIPE "/tmp/pipe"
 

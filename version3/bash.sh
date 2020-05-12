@@ -21,19 +21,20 @@ mkfifo /tmp/pipe
 PIPE=/tmp/pipe
 
 # compile program
-#g++ main.cpp gl_frontEnd.cpp -lm -lGL -lglut -lpthread -o cell
+g++ main.cpp gl_frontEnd.cpp -lm -lGL -lglut -lpthread -o cell
 if [ -f cell ]
 then	
 	echo "built cell"
-	#./cell $1 $2 $3
+	./cell $1 $2 $3
 fi
 
-g++ read_test.cpp -o pipeTest
-if [ -f pipeTest ]
-then	
-	echo "built pipeTest"
-	#./pipeTest
-fi
+## for testing
+# g++ read_test.cpp -o pipeTest
+# if [ -f pipeTest ]
+# then	
+# 	echo "built pipeTest"
+# 	./pipeTest
+# fi
 
 
 while true
@@ -41,19 +42,8 @@ do
 	# write to pipe`
 	read cmd
 	echo "$cmd" > "$PIPE"
-	if [[ $cmd == '27' ]]
+	if [[ $cmd == 'end' ]]
         then
     	    break
         fi
 done
-
-
-
-
-
-
-
-
-
-# terminate program
-#rm cell
