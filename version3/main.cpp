@@ -234,39 +234,60 @@ void* readPipe(void*){
 
 		std::string str(buf);
 
-      //printf("PIPE STUFF:   %s", buf); 
-      close(fd);   
+        //printf("PIPE STUFF:   %s", buf); 
+        close(fd);   
 
-
-
-
-
-		if( str.compare("end") == 1){
+		if(!strcmp(buf, "end\0")){
 			std::cout<<"test1 -----		";
 			temp == false;
 			break;
 		}
-		else if( str.compare("faster") == 1){
+		else if(!strcmp(buf, "end\0")){
 			std::cout<<"test2 -----		";
 			speed *= 9;
 			speed /= 10;
 		}
-		else if( str.compare("slower")== 1){
+		else if(!strcmp(buf, "end\0")){
 			std::cout<<"test3 -----		";			
 			speed *= 11;
 			speed /= 10;
 		}
-		else if( str.compare("rule 1") == 1) rule = GAME_OF_LIFE_RULE;
-		else if( str.compare("rule 2") == 1) rule = CORAL_GROWTH_RULE;
-		else if( str.compare("rule 3") == 1) rule = AMOEBA_RULE;
-		else if( str.compare("rule 4") == 1) rule = MAZE_RULE;
-		else if( str.compare("color on") == 1 || str.compare("color off") == 1) colorMode = !colorMode;
-		else if( str.compare("line") == 1) drawGridLines = !drawGridLines;
-		else if( str.compare("reset") == 1) resetGrid();
+		else if(!strcmp(buf, "rule 1\0")) rule = GAME_OF_LIFE_RULE;
+		else if(!strcmp(buf, "rule 2\0")) rule = CORAL_GROWTH_RULE;
+		else if(!strcmp(buf, "rule 3\0")) rule = AMOEBA_RULE;
+		else if(!strcmp(buf, "rule 4\0")) rule = MAZE_RULE;
+		else if(!strcmp(buf, "color on\0")) || !strcmp(buf, "color off\0")) colorMode = !colorMode;
+		else if(!strcmp(buf, "line\0")) drawGridLines = !drawGridLines;
+		else if(!strcmp(buf, "reset\0")) resetGrid();
+
+
+
+		// if( str.compare("end") == 1){
+		// 	std::cout<<"test1 -----		";
+		// 	temp == false;
+		// 	break;
+		// }
+		// else if( str.compare("faster") == 1){
+		// 	std::cout<<"test2 -----		";
+		// 	speed *= 9;
+		// 	speed /= 10;
+		// }
+		// else if( str.compare("slower")== 1){
+		// 	std::cout<<"test3 -----		";			
+		// 	speed *= 11;
+		// 	speed /= 10;
+		// }
+		// else if( str.compare("rule 1") == 1) rule = GAME_OF_LIFE_RULE;
+		// else if( str.compare("rule 2") == 1) rule = CORAL_GROWTH_RULE;
+		// else if( str.compare("rule 3") == 1) rule = AMOEBA_RULE;
+		// else if( str.compare("rule 4") == 1) rule = MAZE_RULE;
+		// else if( str.compare("color on") == 1 || str.compare("color off") == 1) colorMode = !colorMode;
+		// else if( str.compare("line") == 1) drawGridLines = !drawGridLines;
+		// else if( str.compare("reset") == 1) resetGrid();
 		else{
 			std::cout<<"Invalid command!!\n";		
 		}
-	   std::cout<<"String: "<<str<<"   Size:"<<size<<" \n";
+	   std::cout<<"String: "<<buf<<"   Size:"<<size<<" \n";
 	}
 
 }
